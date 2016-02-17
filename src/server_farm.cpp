@@ -59,50 +59,13 @@ void ServerFarm::count_avg_cperpr() {
     avg_cperpr_ = sum_capacity * 1.0/(npools_ * nrows_); 
 }
 
-// for rows and available slots we can use sparse matrix format: (number of element, number of consecutive free slots)
-int ServerFarm::find_place_inrow(size_t row, size_t width) {
-    size_t consecutive = 0;
-    //for (size_t sl = first_slot_[row]; sl < nslots_; sl++) {
-    for (size_t sl = 0; sl < nslots_; sl++) {
-        if (matrix_[row][sl] == 0) {
-           consecutive++;
-        }
-        if (consecutive == width) {
-            size_t start = sl - consecutive + 1;
-/*            matrix_[row][start] = id + 1;
-            for (size_t i = 0; i < width; i++) {
-                matrix_[row][start + i] = -2;
-            }
- */           return start;
-        }
-        if (matrix_[row][sl] != 0 ) {
-            consecutive = 0;
-        }
-    }
-    return -1;
-}
-
-Pair ServerFarm::find_place(size_t row, size_t width) {
-    bool found = false;
-    for (size_t i = 0; i < nrows_; i++) {
-    //for (size_t i = row; i < nrows_; i++) {
-        // example: nrows_ = 5 row = 3 r = {3 4 0 1 2}
-        int r = (i+row) % nrows_;
-        //int r = i;
-        int slot = find_place_inrow(r, width);
-        if (slot >= 0) {
-            return Pair(r, slot);
-        }
-    }
-    return Pair(-1, 0);
-}
 
 void ServerFarm::place_servers() {
     // sort is preserving order: 2 sorts will make servers be sorted by capacity (decreasing)
     // and for each capacity value - by size (increasing)
     // not working anymore
-    std::sort(servers_v_.begin(), servers_v_.end(), Server::cmp_width); 
-    std::sort(servers_v_.begin(), servers_v_.end(), Server::cmp_cap); 
+    std::stable_sort(servers_v_.begin(), servers_v_.end(), Server::cmp_width);
+    std::stable_sort(servers_v_.begin(), servers_v_.end(), Server::cmp_cap);
 
     //count_na_slots();
     // sort rows by free slots
@@ -119,33 +82,62 @@ void ServerFarm::place_servers() {
             // and for next server has to start from row R until fitting except row F
             current_row = unwrapped_row % nrows_;
             Pair place = find_place(current_row, server->width_);
-  std::cout << "cur row = " << current_row << " place: " << place ; 
+  std::cout << "cur row = " << current_row << " place: " << place ;
+            placement_[server->id_] = place;
+            server->row_ = place.id_;
+            server->slot_ = place.value_;
             if (place.id_ >= 0) {
-                placement_[server->id_] = place;
-                server->row_ = place.id_;
-                server->slot_ = place.value_;
-                for (int i = 0; i < server->width_ ; i++) {
+                for (int i = 0; i < server->width_; i++) {
+                    // +1 because 0 is for free slot in matrix
                     matrix_[place.id_][place.value_ + i] = server->id_ + 1;
                 }
                 if (place.id_ == current_row) {
                     unwrapped_row++;
                 }
-            } else {
-                placement_[server->id_] = Pair(-1, -1);
-                server->row_ = -1; 
-                server->slot_ = -1;
-           }
+            }
     }
 }
+
+Pair ServerFarm::find_place(size_t row, size_t width) {
+    for (size_t i = 0; i < nrows_; i++) {
+        // example: nrows_ = 5 row = 3 r = {3 4 0 1 2}
+        int r = (i+row) % nrows_;
+        int slot = find_place_inrow(r, width);
+        if (slot >= 0) {
+            return Pair(r, slot);
+        }
+    }
+    return Pair(-1, -1);
+}
+
+// for rows and available slots we can use sparse matrix format: (number of element, number of consecutive free slots)
+int ServerFarm::find_place_inrow(size_t row, size_t width) {
+    size_t consecutive = 0;
+    //for (size_t sl = first_slot_[row]; sl < nslots_; sl++) {
+    for (size_t sl = 0; sl < nslots_; sl++) {
+        if (matrix_[row][sl] == 0) {
+            consecutive++;
+        }
+        if (consecutive == width) {
+            return (sl - consecutive + 1);
+        }
+        if (matrix_[row][sl] != 0 ) {
+            consecutive = 0;
+        }
+    }
+    return -1;
+}
+
 
 void ServerFarm::assign_pools () {
     int cur_pool = 0;
     std::sort(servers_v_.begin(), servers_v_.end(), Server::cmp_id); 
     for (int i = 0; i < nrows_; i++) {
         for (int j = 0; j < nslots_; j++) {
-            int sid = matrix_[i][j] - 1;
-            std::cout << "i="<< i << " j=" << j << " sid=" << sid <<  " cur_pool = " << cur_pool % npools_;
-            if (matrix_[i][j] >= 0) {
+            if (matrix_[i][j] > 0) {
+                int sid = matrix_[i][j] - 1;
+                std::cout << "i="<< i << " j=" << j << " sid=" << sid <<  " cur_pool = " << cur_pool % npools_;
+            
                 servers_v_[sid].pool_ = cur_pool % npools_;
                 cur_pool++;
                 j = j + servers_v_[sid].width_ - 1;
