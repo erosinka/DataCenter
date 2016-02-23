@@ -23,6 +23,7 @@ private:
 	};
 
 	std::vector<std::vector<int> > matrix_;
+    std::vector<std::vector<size_t> > pool_caps;
 
 	size_t nrows_;
 	size_t nslots_;
@@ -38,7 +39,12 @@ private:
     std::vector<Pair> placement_;
     void count_na_slots();
     double avg_cperpr_; // capacity/(pools*rows)
-    double median_server_length_; 
+    double median_server_length_;
+      
+    Pair max_cap();
+    Pair min_cap();
+    std::vector<size_t>::iterator find_min_nz(std::vector<size_t>::iterator begin, std::vector<size_t>::iterator end);
+    
 public:
 	std::priority_queue<Server, std::vector<Server>, cap_less> servers_;
     std::vector <Server> servers_v_;
@@ -79,7 +85,8 @@ public:
     size_t calc_score(std::string file); 
     
     void count_avg_cperpr();
-    double get_avg_cperpr() {return avg_cperpr_;} 
+    double get_avg_cperpr() {return avg_cperpr_;}
+    void optimize_pools();
 };
 
 std::ostream &operator<<(std::ostream &out, const ServerFarm &s);

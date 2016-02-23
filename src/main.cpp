@@ -27,5 +27,20 @@ int main(int argc, char * const argv[]){
     ch.read_output("output.txt");
     std::cout << "check is " << ch.check_data() << std::endl;
     std::cout << "score:  " << ch.count_score() << std::endl;
+    
+    sf.optimize_pools();
+    sf.optimize_pools();
+    sf.optimize_pools();
+    sf.output_server_data("output_opt.txt");
+    score = sf.calc_score("output_opt.txt");
+    
+    check opt_ch;
+    opt_ch.read_input("input.txt");
+    opt_ch.read_output("output_opt.txt");
+    std::cout << " opt score = " << score << std::endl;
+   // std::cout << "Print opt pools placement:"<< std::endl;
+   // sf.print_pool(std::cout);
+    std::cout << "opt check is " << opt_ch.check_data() << std::endl;
+    std::cout << "opt score:  " << opt_ch.count_score() << std::endl;
 	return 0;
 }

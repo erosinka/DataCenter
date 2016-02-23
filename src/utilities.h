@@ -60,6 +60,9 @@ struct Server {
     static inline bool cmp_slot (const Server& a, const Server& b) {
         return a.slot_ < b.slot_;
     }
+    static inline bool cmp_pool (const Server& a, const Server& b) {
+        return a.pool_ < b.pool_;
+    }
 	void print(std::ostream &out) const;
 };
 
