@@ -28,7 +28,7 @@ private:
 	size_t nrows_;
 	size_t nslots_;
 	size_t npools_;
-	size_t nunavaiable_;
+	size_t nunavailable_;
 	size_t nservers_;
 
     // id_ = row number, value_ = number of n/a slots
@@ -43,15 +43,14 @@ private:
       
     Pair max_cap();
     Pair min_cap();
-    std::vector<size_t>::iterator find_min_nz(std::vector<size_t>::iterator begin, std::vector<size_t>::iterator end);
-    
+   
 public:
 	std::priority_queue<Server, std::vector<Server>, cap_less> servers_;
     std::vector <Server> servers_v_;
 
 	ServerFarm(std::string filename);
 
-	void print(std::ostream &out) const;
+	void print_room(std::ostream &out) const;
 
     void print_servers(std::ostream &out) const;
     void print_placement(std::ostream &out) const;

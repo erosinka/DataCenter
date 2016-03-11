@@ -69,4 +69,7 @@ struct Server {
 std::ostream &operator<<(std::ostream &out, const Server &s);
 std::ostream &operator<<(std::ostream &out, const Pair &s);
 
+std::vector<size_t>::iterator find_min_nz(std::vector<size_t>::iterator begin, std::vector<size_t>::iterator end);
+
+
 #endif

@@ -9,7 +9,7 @@ ServerFarm::ServerFarm(std::string filename){
     }
 	myfile >> nrows_;
 	myfile >> nslots_;
-	myfile >> nunavaiable_;
+	myfile >> nunavailable_;
 	myfile >> npools_;
 	myfile >> nservers_;
 
@@ -21,8 +21,10 @@ ServerFarm::ServerFarm(std::string filename){
     first_slot_.resize(nrows_);
     servers_v_.resize(nservers_);
     placement_.resize(nservers_);
+    
 	size_t x,y;
-	for(size_t i = 0; i < nunavaiable_; ++i){
+    //read positions of unavailable slots
+	for(int i = 0; i < nunavailable_; ++i){
 		myfile >> x;
 		myfile >> y;
 		matrix_[x][y] = -1;
@@ -59,6 +61,47 @@ void ServerFarm::count_avg_cperpr() {
     avg_cperpr_ = sum_capacity * 1.0/(npools_ * nrows_); 
 }
 
+/*
+void ServerFarm::place_servers() {
+    // sort is preserving order: 2 sorts will make servers be sorted by capacity (decreasing)
+    // and for each capacity value - by size (increasing)
+    std::stable_sort(servers_v_.begin(), servers_v_.end(), Server::cmp_width);
+    std::stable_sort(servers_v_.begin(), servers_v_.end(), Server::cmp_cap);
+    
+    size_t current_row = 0;
+    size_t unwrapped_row = 0;
+    size_t last_width = SIZE_T_MAX;
+    
+    for (size_t s = 0; s < nservers_; s++) {
+        Server * server = &servers_v_[s];
+        //  std::cout << "Server: " << servers_v_[s];
+        // for first server start placing with 0 row.
+        // for each r_th server we start placing with next row
+        // in case the server does not fit in current row R we move to next row
+        // until find place in the row F
+        // and for next server has to start from row R until fitting except row F
+        current_row = unwrapped_row % nrows_;
+        Pair place = find_place(current_row, server->width_);
+        //  std::cout << "cur row = " << current_row << " place: " << place ;
+        placement_[server->id_] = place;
+        server->row_ = place.id_;
+        server->slot_ = place.value_;
+        if (place.id_ >= 0) {
+       // if (place.id_ < 0) {
+       //     last_width = server->width_;
+       // } else {
+            for (int i = 0; i < server->width_; i++) {
+                // id+1 because 0 is for free slot in matrix
+                matrix_[place.id_][place.value_ + i] = server->id_ + 1;
+            }
+            if (place.id_ == current_row) {
+                unwrapped_row++;
+            }
+        }
+    }
+}
+*/
+ 
 
 void ServerFarm::place_servers() {
     // sort is preserving order: 2 sorts will make servers be sorted by capacity (decreasing)
@@ -66,26 +109,31 @@ void ServerFarm::place_servers() {
     std::stable_sort(servers_v_.begin(), servers_v_.end(), Server::cmp_width);
     std::stable_sort(servers_v_.begin(), servers_v_.end(), Server::cmp_cap);
 
-
     size_t current_row = 0;
     size_t unwrapped_row = 0;
-    for (size_t s = 0; s < nservers_; s++) {
-        Server * server = &servers_v_[s];
-//  std::cout << "Server: " << servers_v_[s];
-            // for each r_th server we start placing with 0 (first) row
-            // in case the server does not fit in current row R we move to next
+    
+    for (std::vector<Server>::iterator it = servers_v_.begin(); it!=servers_v_.end(); it++) {
+            // for first server start placing with 0 row.
+            // for each r_th server we start placing with next row
+            // in case the server does not fit in current row R we move to next row
             // until find place in the row F
-            // and for next server has to start from row R until fitting except row F
+            // and for next server has to start from row R until fitting
             current_row = unwrapped_row % nrows_;
-            Pair place = find_place(current_row, server->width_);
-//  std::cout << "cur row = " << current_row << " place: " << place ;
-            placement_[server->id_] = place;
-            server->row_ = place.id_;
-            server->slot_ = place.value_;
+            Pair place = find_place(current_row, it->width_);
+            placement_[it->id_] = place;
+            it->row_ = place.id_;
+            it->slot_ = place.value_;
+/*
+            if (place.id_ < 0) {
+                // if server was not placed and next one is not less - skip next server
+                if (it+1 != servers_v_.end() and ((it+1)->width_ >= it->width_))
+                {}//  it++;
+            } else {
+  */
             if (place.id_ >= 0) {
-                for (int i = 0; i < server->width_; i++) {
-                    // +1 because 0 is for free slot in matrix
-                    matrix_[place.id_][place.value_ + i] = server->id_ + 1;
+                for (int i = 0; i < it->width_; i++) {
+                    // id+1 because 0 is for free slot in matrix
+                    matrix_[place.id_][place.value_ + i] = it->id_ + 1;
                 }
                 if (place.id_ == current_row) {
                     unwrapped_row++;
@@ -94,9 +142,10 @@ void ServerFarm::place_servers() {
     }
 }
 
+
 Pair ServerFarm::find_place(size_t row, size_t width) {
     for (size_t i = 0; i < nrows_; i++) {
-        // example: nrows_ = 5 row = 3 r = {3 4 0 1 2}
+        // example: nrows_ = 5; row = 3; r = {3 4 0 1 2};
         int r = (i+row) % nrows_;
         int slot = find_place_inrow(r, width);
         if (slot >= 0) {
@@ -127,19 +176,20 @@ int ServerFarm::find_place_inrow(size_t row, size_t width) {
 
 void ServerFarm::assign_pools () {
     int cur_pool = 0;
+    // sort servers by id for assigning pools
     std::sort(servers_v_.begin(), servers_v_.end(), Server::cmp_id); 
     for (int i = 0; i < nrows_; i++) {
         for (int j = 0; j < nslots_; j++) {
             if (matrix_[i][j] > 0) {
                 int sid = matrix_[i][j] - 1;
-      //          std::cout << "i="<< i << " j=" << j << " sid=" << sid <<  " cur_pool = " << cur_pool % npools_;
-            
                 servers_v_[sid].pool_ = cur_pool % npools_;
                 cur_pool++;
                 j = j + servers_v_[sid].width_ - 1;
-       //         std::cout << "    server =" << servers_v_[sid] << " new j = " << j << " new cur_pool = " << cur_pool % npools_;
+                if (j < 0) {
+                    std::cout << "Server "<< sid << "must have zero width." << std::endl;
+                    exit(EXIT_FAILURE);
+                }
             }
-       //     std::cout << std::endl;
         }
     }
 }
@@ -150,11 +200,13 @@ void ServerFarm::output_server_data(std::string outfile){
        std::cout << "Unable to open output file"<<std::endl;
        exit(EXIT_FAILURE);
     }
+    // sort servers by id for output
     std::sort(servers_v_.begin(), servers_v_.end(), Server::cmp_id); 
-    for(size_t i = 0; i < nservers_; ++i){
-        Server s = servers_v_[i];
-        if(s.row_ >= 0)
-            ofile << s.row_ << " " << s.slot_ << " " << s.pool_ << std::endl;
+   // for(size_t i = 0; i < nservers_; ++i){
+    for (std::vector<Server>::iterator it = servers_v_.begin(); it!=servers_v_.end(); it++) {
+    //    Server s = servers_v_[i];
+        if (it->row_ >= 0)
+            ofile << it->row_ << " " << it->slot_ << " " << it->pool_ << std::endl;
         else
             ofile <<"x"<< std::endl;
     }
@@ -220,11 +272,13 @@ void ServerFarm::optimize_pools() {
     //put this in separate func
     for(std::vector<size_t>& v : pool_caps)
         std::fill(v.begin(), v.end(), 0.);
-    for (int s = 0; s<nservers_; s++){
-        Server ser =servers_v_[s];
-        if (ser.row_ >= 0)
-            pool_caps[ser.pool_][ser.row_] += ser.cap_;
+    
+    for (std::vector<Server>::iterator it = servers_v_.begin(); it!=servers_v_.end(); it++) {
+        if (it->row_ >= 0)
+            pool_caps[it->pool_][it->row_] += it->cap_;
     }
+    
+    
     //find pool and row with smallest and larges capacity in some row
     Pair min_place = min_cap();
     Pair max_place = max_cap();
@@ -235,6 +289,7 @@ void ServerFarm::optimize_pools() {
     std::vector <int> row_max = matrix_[max_place.value_];
     std::vector <int>:: iterator it;
 
+    //??
     int cur_min_cap = MAX_INPUT;
     int cur_max_cap = 0;
     int id_min = -1;
@@ -257,11 +312,14 @@ void ServerFarm::optimize_pools() {
         }
     }
     //swap servers
-    //swap(&servers_v_[id_min].pool_, &servers_v_[id_max].pool_);
+    //int i = 1, j = 2;
+    //std::swap(&i, &j);
+    //std::swap(&(servers_v_[id_min].pool_), &(servers_v_[id_max].pool_));
     int tmp_pool = servers_v_[id_min].pool_;
     servers_v_[id_min].pool_ = servers_v_[id_max].pool_;
     servers_v_[id_max].pool_ = tmp_pool;
     
+    // update pools' capacities
     for(std::vector<size_t>& v : pool_caps)
         std::fill(v.begin(), v.end(), 0.);
     for (int s = 0; s<nservers_; s++){
@@ -274,7 +332,7 @@ void ServerFarm::optimize_pools() {
 }
 
 
-//find pool giving min garanteed and row for this pool giving min row capacity
+//find pool which gives min garanteed and row for this pool with min row capacity
 Pair ServerFarm::min_cap() {
     std::vector <size_t> pools;
     pools.resize(npools_);
@@ -286,9 +344,12 @@ Pair ServerFarm::min_cap() {
         size_t max_cap = *(std::max_element(pool_caps[p].begin(), pool_caps[p].end()));
         //for each pool count it's garanteed
         // may be zero if pool has servers only in 1 row
+        /*
         if(p==38 or p==10) {
             int a = 6;
         }
+         */
+        // pools[p] - garanteed capacity for pool p (in case one row with max capacity for this pool is out of order)
         pools[p] = std::accumulate(pool_caps[p].begin(), pool_caps[p].end(),0) - max_cap;
         if (!pools[p]) {
             std::cout << "Pool " << p << " id represented only in 1 row." << std::endl;
@@ -302,7 +363,7 @@ Pair ServerFarm::min_cap() {
     // optimize: find row in which this pool has min capacity: if zero, than re-assign pool for one of the servers for which pool
     // this won't affect garanteed capacity
     
-    //row in which this pool has min non zero cap
+    //row in which this pool has min non zero cap (that's why no std::min_element)
     it = find_min_nz(pool_caps[pool].begin(), pool_caps[pool].end());
     row = std::distance(pool_caps[pool].begin(), it);
     std::cout << "min place: pool = " << pool << " row = " << row <<std::endl;
@@ -326,42 +387,29 @@ Pair ServerFarm::max_cap() {
     it = std::max_element(pools.begin(), pools.end());
     pool = std::distance(pools.begin(), it);
     
-    //row in which this pool has min cap
-    // *it zero for the row in which pool is not represented
-    //it = std::min_element(pool_caps[pool].begin(), pool_caps[pool].end());
-    
-    //custom min func for finding non-zero min element
-    // *it = 54, row = 16
-   // pool_caps[11][0]=111;
     it = std::max_element(pool_caps[pool].begin(),  pool_caps[pool].end());
     row = std::distance(pool_caps[pool].begin(), it);
-    if (!*it) {
+    if (!(*it)) {
         std::cout << "Pool's " << pool << " min capacity is zero in row " << row << std::endl;
     }
     return Pair(pool, row);
 }
 
-std::vector<size_t>::iterator ServerFarm::find_min_nz(std::vector<size_t>::iterator begin, std::vector<size_t>::iterator end) {
-    size_t val = SIZE_T_MAX;
-    std::vector<size_t>::iterator min_it;
-    for (std::vector<size_t>::iterator it = begin; it != end; it++){
-        size_t it_val = *it;
-        if (it_val and val > it_val) {
-            val = it_val;
-            min_it = it;
-        }
-    }
-    return min_it;
-}
 
-void ServerFarm::print(std::ostream &out) const{
+void ServerFarm::print_room(std::ostream &out) const{
 	for(size_t i = 0; i < nrows_; ++i){
 		for(size_t j = 0; j < nslots_; ++j){
+          //  out<<matrix_[i][j]<<"\t";
+            
             if (matrix_[i][j] > 0)
-			    out<<matrix_[i][j]<<"\t";
-                //out << servers_v_[matrix_[i][j] - 1].pool_ << "\t";
-            else
-			    out<<matrix_[i][j]<<"\t";
+                out << matrix_[i][j] - 1 <<"\t";
+            else {
+                if (matrix_[i][j] == 0)
+                    out<<"x\t";
+                else
+                    out<<matrix_[i][j]<<"\t";
+            }
+            
 		}
 		out<<std::endl;
 	}
@@ -371,7 +419,6 @@ void ServerFarm::print_pool(std::ostream &out) const{
 	for(size_t i = 0; i < nrows_; ++i){
 		for(size_t j = 0; j < nslots_; ++j){
             if (matrix_[i][j] > 0)
-			    //out<<matrix_[i][j]<<"\t";
                 out << servers_v_[matrix_[i][j] - 1].pool_ << "\t";
             else
 			    out<<matrix_[i][j]<<"\t";
@@ -395,7 +442,7 @@ void ServerFarm::print_servers(std::ostream &out) const{
 }
 
 std::ostream &operator<<(std::ostream &out, const ServerFarm &s){
-	s.print(out);
+	s.print_room(out);
 	return out;
 }
 
