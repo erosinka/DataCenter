@@ -86,6 +86,9 @@ public:
     void count_avg_cperpr();
     double get_avg_cperpr() {return avg_cperpr_;}
     void optimize_pools();
+    int score();
+    void server_exchange();
+    void count_pool_caps();
 };
 
 std::ostream &operator<<(std::ostream &out, const ServerFarm &s);

@@ -28,9 +28,9 @@ struct Pair {
 };
 
 struct Server {
+    int id_;
 	int width_;
 	int cap_;
-    int id_;
     double dens_;
     int row_;
     int slot_;

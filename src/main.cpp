@@ -29,8 +29,7 @@ int main(int argc, char * const argv[]){
     std::cout << "score:  " << ch.count_score() << std::endl;
     
     sf.optimize_pools();
-    sf.optimize_pools();
-    sf.optimize_pools();
+   
     sf.output_server_data("output_opt.txt");
     score = sf.calc_score("output_opt.txt");
     
